@@ -1,0 +1,10 @@
+services:
+  rabbitmq-broker:
+    image: rabbitmq:management-alpine
+    container_name: rabbitmq-broker
+    ports:
+      - '15672:15672'
+      - '5672:5672'
+    environment:
+      - RABBITMQ_DEFAULT_USER='rabbitmq'
+      - RABBITMQ_DEFAULT_PASS='passworD'
