@@ -6,5 +6,5 @@ services:
       - '15672:15672'
       - '5672:5672'
     environment:
-      - RABBITMQ_DEFAULT_USER='rabbitmq'
-      - RABBITMQ_DEFAULT_PASS='passworD'
+      - RABBITMQ_DEFAULT_USER=rabbitmq
+      - RABBITMQ_DEFAULT_PASS=passworD
