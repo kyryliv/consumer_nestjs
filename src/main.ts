@@ -1,7 +1,10 @@
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
 import { AppModule } from './app.module';
-import { RABBITMQ_QUEUE, RABBITMQ_URL } from './rabbitmq.constants';
+
+const RABBITMQ_URL =
+  process.env.RABBITMQ_URL ?? 'amqp://rabbitmq:passworD@localhost:5672';
+const RABBITMQ_QUEUE = process.env.RABBITMQ_QUEUE ?? 'main_queue';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -10,6 +13,7 @@ async function bootstrap() {
     options: {
       urls: [RABBITMQ_URL],
       queue: RABBITMQ_QUEUE,
+      wildcards: true,
       noAck: false,
       queueOptions: {
         durable: true,
@@ -18,6 +22,5 @@ async function bootstrap() {
   });
 
   await app.startAllMicroservices();
-  await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();

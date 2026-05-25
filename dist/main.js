@@ -3,14 +3,16 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const core_1 = require("@nestjs/core");
 const microservices_1 = require("@nestjs/microservices");
 const app_module_1 = require("./app.module");
-const rabbitmq_constants_1 = require("./rabbitmq.constants");
+const RABBITMQ_URL = process.env.RABBITMQ_URL ?? 'amqp://rabbitmq:passworD@localhost:5672';
+const RABBITMQ_QUEUE = process.env.RABBITMQ_QUEUE ?? 'main_queue';
 async function bootstrap() {
     const app = await core_1.NestFactory.create(app_module_1.AppModule);
     app.connectMicroservice({
         transport: microservices_1.Transport.RMQ,
         options: {
-            urls: [rabbitmq_constants_1.RABBITMQ_URL],
-            queue: rabbitmq_constants_1.RABBITMQ_QUEUE,
+            urls: [RABBITMQ_URL],
+            queue: RABBITMQ_QUEUE,
+            wildcards: true,
             noAck: false,
             queueOptions: {
                 durable: true,
@@ -18,7 +20,6 @@ async function bootstrap() {
         },
     });
     await app.startAllMicroservices();
-    await app.listen(process.env.PORT ?? 3000);
 }
 bootstrap();
 //# sourceMappingURL=main.js.map

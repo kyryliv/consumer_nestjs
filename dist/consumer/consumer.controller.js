@@ -11,31 +11,42 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 var __param = (this && this.__param) || function (paramIndex, decorator) {
     return function (target, key) { decorator(target, key, paramIndex); }
 };
-var ConsumerController_1;
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConsumerController = void 0;
 const common_1 = require("@nestjs/common");
 const microservices_1 = require("@nestjs/microservices");
-const rabbitmq_constants_1 = require("../rabbitmq.constants");
-let ConsumerController = ConsumerController_1 = class ConsumerController {
-    logger = new common_1.Logger(ConsumerController_1.name);
-    handleMessage(payload, context) {
-        this.logger.log(`Received message: ${payload.message}`);
-        const channel = context.getChannelRef();
-        const originalMessage = context.getMessage();
-        channel.ack(originalMessage);
+const consumer_service_1 = require("./consumer.service");
+let ConsumerController = class ConsumerController {
+    consumerService;
+    constructor(consumerService) {
+        this.consumerService = consumerService;
+    }
+    handleShoporders(payload, context) {
+        this.consumerService.handleShoporders(payload, context);
+    }
+    handleEtc(payload, context) {
+        this.consumerService.handleEtc(payload, context);
     }
 };
 exports.ConsumerController = ConsumerController;
 __decorate([
-    (0, microservices_1.EventPattern)(rabbitmq_constants_1.RABBITMQ_EVENT),
+    (0, microservices_1.EventPattern)('shoporders_event'),
     __param(0, (0, microservices_1.Payload)()),
     __param(1, (0, microservices_1.Ctx)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, microservices_1.RmqContext]),
     __metadata("design:returntype", void 0)
-], ConsumerController.prototype, "handleMessage", null);
-exports.ConsumerController = ConsumerController = ConsumerController_1 = __decorate([
-    (0, common_1.Controller)()
+], ConsumerController.prototype, "handleShoporders", null);
+__decorate([
+    (0, microservices_1.EventPattern)('*'),
+    __param(0, (0, microservices_1.Payload)()),
+    __param(1, (0, microservices_1.Ctx)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, microservices_1.RmqContext]),
+    __metadata("design:returntype", void 0)
+], ConsumerController.prototype, "handleEtc", null);
+exports.ConsumerController = ConsumerController = __decorate([
+    (0, common_1.Controller)(),
+    __metadata("design:paramtypes", [consumer_service_1.ConsumerService])
 ], ConsumerController);
 //# sourceMappingURL=consumer.controller.js.map
