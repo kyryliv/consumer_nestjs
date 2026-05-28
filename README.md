@@ -44,6 +44,24 @@ $ npm run start:dev
 $ npm run start:prod
 ```
 
+## Drupal REST forwarding
+
+The `shoporders_event` RabbitMQ consumer forwards each message payload to a Drupal REST resource.
+
+Set the Drupal connection values in the root `.env` file:
+
+```env
+DRUPAL_REST_URL=https://your-drupal-site.example.com/path/to/rest/resource
+DRUPAL_JWT_TOKEN=your-jwt-token
+```
+
+The consumer sends a `POST` request with:
+
+- `Authorization: Bearer <DRUPAL_JWT_TOKEN>`
+- `Content-Type: application/json`
+
+It only acknowledges the RabbitMQ message after Drupal returns a successful `2xx` response. Failed Drupal requests are requeued.
+
 ## Run tests
 
 ```bash

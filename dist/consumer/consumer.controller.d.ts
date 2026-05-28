@@ -6,7 +6,7 @@ export declare class ConsumerController {
     handleShoporders(payload: {
         message: string;
         createdAt?: string;
-    }, context: RmqContext): void;
+    }, context: RmqContext): Promise<void>;
     handleEtc(payload: {
         message: string;
         createdAt?: string;

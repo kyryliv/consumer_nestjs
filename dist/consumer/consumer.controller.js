@@ -21,8 +21,8 @@ let ConsumerController = class ConsumerController {
     constructor(consumerService) {
         this.consumerService = consumerService;
     }
-    handleShoporders(payload, context) {
-        this.consumerService.handleShoporders(payload, context);
+    async handleShoporders(payload, context) {
+        await this.consumerService.handleShoporders(payload, context);
     }
     handleEtc(payload, context) {
         this.consumerService.handleEtc(payload, context);
@@ -35,7 +35,7 @@ __decorate([
     __param(1, (0, microservices_1.Ctx)()),
     __metadata("design:type", Function),
     __metadata("design:paramtypes", [Object, microservices_1.RmqContext]),
-    __metadata("design:returntype", void 0)
+    __metadata("design:returntype", Promise)
 ], ConsumerController.prototype, "handleShoporders", null);
 __decorate([
     (0, microservices_1.EventPattern)('*'),
