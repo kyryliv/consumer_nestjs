@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { MicroserviceOptions, Transport } from '@nestjs/microservices';
-import { AppModule } from './app.module';
+import { AppModule } from '../src/app.module';
 
 const RABBITMQ_URL =
   process.env.RABBITMQ_URL ?? 'amqp://rabbitmq:passworD@localhost:5672';

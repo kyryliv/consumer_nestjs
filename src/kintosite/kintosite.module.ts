@@ -1,11 +1,11 @@
 import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
-import { KintoAuthService } from './kintosite.auth.service';
+import { KintositeAuthService } from './kintosite.auth.service';
 import { KintositeService } from './kintosite.service';
 
 @Module({
   imports: [HttpModule],
-  providers: [KintoAuthService, KintositeService],
+  providers: [KintositeAuthService, KintositeService],
   exports: [KintositeService],
 })
-export class KintoModule {}
+export class KintositeModule {}

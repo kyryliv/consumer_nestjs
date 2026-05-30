@@ -4,9 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import type { AxiosRequestConfig, AxiosResponse, Method } from 'axios';
 import { Agent } from 'https';
 import { firstValueFrom } from 'rxjs';
-import { KintoAuthService } from './kintosite.auth.service';
 import { buildHttpsAgent } from '../common/https-agent.util';
-import { kintoAuthLoginEndpointId, kintoEndpoints } from './kintosite.endpoints';
+import { kintoEndpoints } from './kintosite.endpoints';
 import { HttpEndpointDefinition } from './kintosite.types';
 import { buildUrl, isObject, resolveTemplate } from './kintosite.utils';
 
@@ -25,7 +24,6 @@ export class KintositeService {
   constructor(
     private readonly http: HttpService,
     private readonly config: ConfigService,
-    private readonly authService: KintoAuthService,
   ) {
     this.httpsAgent = buildHttpsAgent(this.config.get('ALLOW_WEAK_TLS'));
     const url = process.env[`REMOTE_URL_${REMOTE_ID.toUpperCase()}`];
@@ -57,20 +55,12 @@ export class KintositeService {
     timeout: number,
     context: Record<string, unknown>,
   ): Promise<unknown> {
-    // Flow endpoints are orchestration methods, not HTTP endpoints
-    if (endpoint.method === 'flow') {
-      throw new InternalServerErrorException(
-        `Flow endpoint "${endpoint.id}" cannot be executed directly. Use executeById instead.`,
-      );
-    }
 
     if (!endpoint.path) {
       throw new InternalServerErrorException(
         `Endpoint "${endpoint.id}" has no path defined.`,
       );
     }
-
-    const isAuthLoginEndpoint = endpoint.id === kintoAuthLoginEndpointId;
 
     const resolvedPath = resolveTemplate(endpoint.path, context);
     const url = buildUrl(
@@ -84,10 +74,7 @@ export class KintositeService {
       );
     }
 
-    const params = resolveTemplate(endpoint.params, context);
-    const data = resolveTemplate(endpoint.params, context);
-
-    const usesAuth = !isAuthLoginEndpoint;
+    const resolvedData = resolveTemplate(endpoint.data, context);
 
     const sendRequest = async (jwt: string) => {
       const requestConfig: AxiosRequestConfig = {
@@ -99,23 +86,22 @@ export class KintositeService {
           ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
         },
         httpsAgent: this.httpsAgent,
-        params: isObject(params) ? params : undefined,
-        data,
+        data: resolvedData,
       };
       return firstValueFrom(
         this.http.request({ ...requestConfig, maxRedirects: 0, validateStatus: () => true }),
       );
     };
 
-    let jwt = usesAuth ? await this.authService.getJwt() : '';
+    let jwt = await this.getJwt();
     let response = await sendRequest(jwt);
-    if (usesAuth && (response.status === 301 || response.status === 401)) {
-      this.authService.invalidateJwt();
-      jwt = await this.authService.getJwt();
+    if (response.status === 301 || response.status === 401) {
+      this.invalidateJwt();
+      jwt = await this.getJwt();
       response = await sendRequest(jwt);
     }
 
-    if (usesAuth && (response.status === 301 || response.status === 401)) {
+    if (response.status === 301 || response.status === 401) {
       throw new InternalServerErrorException(
         `Authorization failed for "${REMOTE_ID}" on endpoint "${endpoint.id}"`,
       );
@@ -134,43 +120,13 @@ export class KintositeService {
     };
   }
 
-  /**
-   * Sends an HTTP request with Kinto JWT authentication.
-   * Acquires a JWT, attaches it as a Bearer token, and retries once on 401/301
-   * by invalidating and refreshing the token.
-   */
-  async sendAuthenticated(
-    config: AxiosRequestConfig,
-    endpointId: string,
-  ): Promise<AxiosResponse> {
-    const send = async (jwt: string): Promise<AxiosResponse> =>
-      firstValueFrom(
-        this.http.request({
-          ...config,
-          maxRedirects: 0,
-          validateStatus: () => true,
-          headers: {
-            ...config.headers,
-            Authorization: `Bearer ${jwt}`,
-          },
-        }),
-      );
-
-    let jwt = await this.authService.getJwt();
-    let response = await send(jwt);
-
-    if (response.status === 301 || response.status === 401) {
-      this.authService.invalidateJwt();
-      jwt = await this.authService.getJwt();
-      response = await send(jwt);
-    }
-
-    if (response.status === 301 || response.status === 401) {
-      throw new InternalServerErrorException(
-        `Authorization failed for "${REMOTE_ID}" on endpoint "${endpointId}"`,
-      );
-    }
-
-    return response;
+  private async getJwt(): Promise<string> {
+    // Placeholder for JWT retrieval logic, e.g., from a cache or an auth service
+    return '';
   }
+
+  private invalidateJwt(): void {
+    // Placeholder for JWT invalidation logic, e.g., clearing a cache or notifying an auth service
+  }
+
 }
