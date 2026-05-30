@@ -39,14 +39,6 @@ export function resolveTemplate(
     return value.map((item) => resolveTemplate(item, context));
   }
 
-  if (isObject(value)) {
-    const out: Record<string, unknown> = {};
-    for (const [key, child] of Object.entries(value)) {
-      out[key] = resolveTemplate(child as TemplateValue, context);
-    }
-    return out;
-  }
-
   return value;
 }
 
@@ -55,20 +47,9 @@ export function getByPath(source: unknown, path: string): unknown {
     return source;
   }
   return path.split('.').reduce<unknown>((acc, part) => {
-    if (!isObject(acc) && !Array.isArray(acc)) {
+    if (typeof acc !== 'object' || acc === null || Array.isArray(acc)) {
       return undefined;
     }
     return (acc as Record<string, unknown>)[part];
   }, source);
-}
-
-export function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-export function toRecord(value: unknown): Record<string, unknown> {
-  if (isObject(value)) {
-    return value;
-  }
-  return {};
 }

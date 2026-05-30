@@ -12,7 +12,6 @@ export interface HttpEndpointDefinition {
   method: HttpMethod;
   path?: string;
   params?: TemplateValue;
-  data?: TemplateValue;  
 }
 
 export type EndpointDefinition = HttpEndpointDefinition;

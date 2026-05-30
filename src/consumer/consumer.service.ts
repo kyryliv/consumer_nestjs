@@ -1,12 +1,40 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { RmqContext } from '@nestjs/microservices';
+import { KintositeService } from '../kintosite/kintosite.service';
 
 @Injectable()
 export class ConsumerService {
     private readonly logger = new Logger(ConsumerService.name);
 
-    async handleShoporders(
-        payload: { message: string; createdAt?: string },
+    constructor(private readonly kintositeService: KintositeService) {}
+
+    async handleFundsListUpdate(
+        payload: { message: string },
+        context: RmqContext,
+    ): Promise<void> {
+        const channel = context.getChannelRef();
+        const originalMessage = context.getMessage();
+
+        this.logger.log(
+            `Received message with routing key: ${String(context.getPattern())}`,
+        );
+
+        try {
+            const fundsList = JSON.parse(payload.message);
+            await this.kintositeService.executeById(
+                'funds_list.update',
+                fundsList,
+            );
+            channel.ack(originalMessage);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            this.logger.error(`Failed to forward funds list payload: ${message}`);
+            channel.nack(originalMessage, false, true);
+        }
+    }
+
+    async handleShopordersUpdate(
+        payload: { message: string },
         context: RmqContext,
     ): Promise<void> {
         const channel = context.getChannelRef();
@@ -18,7 +46,10 @@ export class ConsumerService {
 
         try {
             const shoporders = JSON.parse(payload.message);
-            await this.sendToDrupal(shoporders);
+            await this.kintositeService.executeById(
+                'shoporders.update',
+                shoporders,
+            );
             channel.ack(originalMessage);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
@@ -39,34 +70,5 @@ export class ConsumerService {
 
         const originalMessage = context.getMessage();
         channel.ack(originalMessage);
-    }
-
-    private async sendToDrupal(payload: unknown): Promise<void> {
-        const drupalRestUrl = process.env.DRUPAL_REST_URL;
-        const drupalJwtToken = process.env.DRUPAL_JWT_TOKEN;
-
-        if (!drupalRestUrl) {
-            throw new Error('DRUPAL_REST_URL is not configured');
-        }
-
-        if (!drupalJwtToken) {
-            throw new Error('DRUPAL_JWT_TOKEN is not configured');
-        }
-
-        const response = await fetch(drupalRestUrl, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${drupalJwtToken}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
-
-        if (!response.ok) {
-            const responseBody = await response.text();
-            throw new Error(
-                `Drupal REST request failed with ${response.status}: ${responseBody}`,
-            );
-        }
     }
 }

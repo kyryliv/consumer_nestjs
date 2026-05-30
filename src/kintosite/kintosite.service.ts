@@ -1,16 +1,15 @@
 import { HttpService } from '@nestjs/axios';
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AxiosRequestConfig, AxiosResponse, Method } from 'axios';
+import type { AxiosRequestConfig, Method } from 'axios';
+import { promises as fs } from 'fs';
 import { Agent } from 'https';
+import jwt, { type Algorithm, type JwtPayload } from 'jsonwebtoken';
+import path from 'path';
 import { firstValueFrom } from 'rxjs';
-import { buildHttpsAgent } from '../common/https-agent.util';
 import { kintoEndpoints } from './kintosite.endpoints';
 import { HttpEndpointDefinition } from './kintosite.types';
-import { buildUrl, isObject, resolveTemplate } from './kintosite.utils';
-
-const REMOTE_ID = 'kinto';
-const SYNC_FLOW_ENDPOINT_ID = 'root.fetch';
+import { buildUrl, resolveTemplate } from './kintosite.utils';
 
 @Injectable()
 export class KintositeService {
@@ -20,39 +19,38 @@ export class KintositeService {
 
   private readonly baseUrl: string;
   private readonly httpsAgent: Agent | undefined;
+  private readonly timeout: number;
+  private jwt: string = '';
 
   constructor(
     private readonly http: HttpService,
     private readonly config: ConfigService,
-  ) {
-    this.httpsAgent = buildHttpsAgent(this.config.get('ALLOW_WEAK_TLS'));
-    const url = process.env[`REMOTE_URL_${REMOTE_ID.toUpperCase()}`];
+  ) 
+  {
+    const url = process.env[`DRUPAL_REST_URL`];
     if (!url) {
-      throw new Error(`REMOTE_URL_${REMOTE_ID.toUpperCase()} is not configured`);
+      throw new Error(`DRUPAL_REST_URL is not configured`);
     }
     this.baseUrl = url;
-  }
+    this.timeout = this.config.get<number>('HTTP_TIMEOUT_MS') ?? 10000;
 
-  async fetchData(input: Record<string, unknown> = {}): Promise<unknown> {
-    return this.executeById(SYNC_FLOW_ENDPOINT_ID, input);
+    this.invalidateJwt();
   }
 
   async executeById(
     endpointId: string,
     input: Record<string, unknown> = {},
   ): Promise<unknown> {
-    const timeout = this.config.get<number>('HTTP_TIMEOUT_MS') ?? 10000;
     const endpoint = this.endpointById.get(endpointId);
     if (!endpoint) {
       throw new InternalServerErrorException(`Endpoint "${endpointId}" not found`);
     }
     const context: Record<string, unknown> = { input };
-    return this.executeEndpoint(endpoint, timeout, context);
+    return this.executeEndpoint(endpoint, context);
   }
 
   private async executeEndpoint(
     endpoint: HttpEndpointDefinition,
-    timeout: number,
     context: Record<string, unknown>,
   ): Promise<unknown> {
 
@@ -74,13 +72,13 @@ export class KintositeService {
       );
     }
 
-    const resolvedData = resolveTemplate(endpoint.data, context);
+    const resolvedData = resolveTemplate(endpoint.params, context);
 
     const sendRequest = async (jwt: string) => {
       const requestConfig: AxiosRequestConfig = {
         method: endpoint.method as Method,
         url,
-        timeout,
+        timeout: this.timeout,
         headers: {
           'Content-Type': 'application/json',
           ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
@@ -93,7 +91,7 @@ export class KintositeService {
       );
     };
 
-    let jwt = await this.getJwt();
+    let jwt = await this.getJwt();    
     let response = await sendRequest(jwt);
     if (response.status === 301 || response.status === 401) {
       this.invalidateJwt();
@@ -103,7 +101,7 @@ export class KintositeService {
 
     if (response.status === 301 || response.status === 401) {
       throw new InternalServerErrorException(
-        `Authorization failed for "${REMOTE_ID}" on endpoint "${endpoint.id}"`,
+        `Authorization failed on endpoint "${endpoint.id}"`,
       );
     }
 
@@ -121,12 +119,70 @@ export class KintositeService {
   }
 
   private async getJwt(): Promise<string> {
-    // Placeholder for JWT retrieval logic, e.g., from a cache or an auth service
-    return '';
+    if (this.jwt) {
+      return this.jwt;
+    }
+
+    const privateKeySetting = process.env.DRUPAL_PRIVATEKEY;
+    const keyId = process.env.DRUPAL_KEYID;
+    const algorithmSetting = (process.env.DRUPAL_ALGORITHM ?? 'RSA').toUpperCase();
+
+    if (!privateKeySetting) {
+      throw new Error('DRUPAL_PRIVATEKEY is not configured');
+    }
+
+    if (!keyId) {
+      throw new Error('DRUPAL_KEYID is not configured');
+    }
+
+    if (algorithmSetting !== 'RSA') {
+      throw new Error(`Unsupported DRUPAL_ALGORITHM "${algorithmSetting}". Expected "RSA".`);
+    }
+
+    const privateKeyPem = privateKeySetting.includes('BEGIN PRIVATE KEY')
+      ? privateKeySetting
+      : await this.readPrivateKeyFromPath(privateKeySetting);
+
+    const payload: JwtPayload = {
+      iat: Math.floor(Date.now() / 1000),
+    };
+
+    this.jwt = jwt.sign(payload, privateKeyPem, {
+      algorithm: 'RS256' as Algorithm,
+      expiresIn: '5m',
+      keyid: keyId,
+    });
+
+    return this.jwt;
+  }
+
+  private async readPrivateKeyFromPath(privateKeyPath: string): Promise<string> {
+    const normalizedPath = privateKeyPath.trim();
+    const candidatePaths = [
+      normalizedPath,
+      path.resolve(process.cwd(), normalizedPath),
+      path.resolve(
+        process.cwd(),
+        'src/kintosite',
+        normalizedPath.replace(/^\.\//, ''),
+      ),
+    ];
+
+    for (const candidatePath of candidatePaths) {
+      try {
+        return await fs.readFile(candidatePath, 'utf-8');
+      } catch {
+        // Try next candidate path
+      }
+    }
+
+    throw new Error(
+      `Unable to read DRUPAL_PRIVATEKEY from "${privateKeyPath}". Checked: ${candidatePaths.join(', ')}`,
+    );
   }
 
   private invalidateJwt(): void {
-    // Placeholder for JWT invalidation logic, e.g., clearing a cache or notifying an auth service
+    this.jwt = '';
   }
 
 }

@@ -3,6 +3,10 @@ import { ConsumerService } from './consumer.service';
 export declare class ConsumerController {
     private readonly consumerService;
     constructor(consumerService: ConsumerService);
+    handleFundsList(payload: {
+        message: string;
+        createdAt?: string;
+    }, context: RmqContext): Promise<void>;
     handleShoporders(payload: {
         message: string;
         createdAt?: string;
