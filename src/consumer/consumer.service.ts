@@ -40,17 +40,13 @@ export class ConsumerService {
         const channel = context.getChannelRef();
         const originalMessage = context.getMessage();
 
-        this.logger.log(
-            `Received message with routing key: ${String(context.getPattern())}`,
-        );
-
         try {
             const shoporders = JSON.parse(payload.message);
             await this.kintositeService.executeById(
                 'shoporders.update',
                 shoporders,
             );
-            channel.ack(originalMessage);
+        channel.ack(originalMessage);
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             this.logger.error(`Failed to forward shoporders payload: ${message}`);

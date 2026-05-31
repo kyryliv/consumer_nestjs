@@ -6,20 +6,20 @@ import { ConsumerService } from './consumer.service';
 export class ConsumerController {
   constructor(private readonly consumerService: ConsumerService) { }
 
-  @EventPattern('funds_list_event')
-  async handleFundsList(
-    @Payload() payload: { message: string; createdAt?: string },
-    @Ctx() context: RmqContext,
-  ): Promise<void> {
-    await this.consumerService.handleFundsListUpdate(payload, context);
-  }
-
   @EventPattern('shoporders_event')
   async handleShoporders(
     @Payload() payload: { message: string; createdAt?: string },
     @Ctx() context: RmqContext,
   ): Promise<void> {
     await this.consumerService.handleShopordersUpdate(payload, context);
+  }
+
+  @EventPattern('funds_list_event')
+  async handleFundsList(
+    @Payload() payload: { message: string; createdAt?: string },
+    @Ctx() context: RmqContext,
+  ): Promise<void> {
+    await this.consumerService.handleFundsListUpdate(payload, context);
   }
 
   @EventPattern('*')

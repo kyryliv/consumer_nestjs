@@ -21,25 +21,17 @@ let ConsumerController = class ConsumerController {
     constructor(consumerService) {
         this.consumerService = consumerService;
     }
-    async handleFundsList(payload, context) {
-        await this.consumerService.handleFundsListUpdate(payload, context);
-    }
     async handleShoporders(payload, context) {
         await this.consumerService.handleShopordersUpdate(payload, context);
+    }
+    async handleFundsList(payload, context) {
+        await this.consumerService.handleFundsListUpdate(payload, context);
     }
     handleEtc(payload, context) {
         this.consumerService.handleEtc(payload, context);
     }
 };
 exports.ConsumerController = ConsumerController;
-__decorate([
-    (0, microservices_1.EventPattern)('funds_list_event'),
-    __param(0, (0, microservices_1.Payload)()),
-    __param(1, (0, microservices_1.Ctx)()),
-    __metadata("design:type", Function),
-    __metadata("design:paramtypes", [Object, microservices_1.RmqContext]),
-    __metadata("design:returntype", Promise)
-], ConsumerController.prototype, "handleFundsList", null);
 __decorate([
     (0, microservices_1.EventPattern)('shoporders_event'),
     __param(0, (0, microservices_1.Payload)()),
@@ -48,6 +40,14 @@ __decorate([
     __metadata("design:paramtypes", [Object, microservices_1.RmqContext]),
     __metadata("design:returntype", Promise)
 ], ConsumerController.prototype, "handleShoporders", null);
+__decorate([
+    (0, microservices_1.EventPattern)('funds_list_event'),
+    __param(0, (0, microservices_1.Payload)()),
+    __param(1, (0, microservices_1.Ctx)()),
+    __metadata("design:type", Function),
+    __metadata("design:paramtypes", [Object, microservices_1.RmqContext]),
+    __metadata("design:returntype", Promise)
+], ConsumerController.prototype, "handleFundsList", null);
 __decorate([
     (0, microservices_1.EventPattern)('*'),
     __param(0, (0, microservices_1.Payload)()),

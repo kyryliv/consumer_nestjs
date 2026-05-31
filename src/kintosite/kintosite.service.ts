@@ -25,15 +25,19 @@ export class KintositeService {
   constructor(
     private readonly http: HttpService,
     private readonly config: ConfigService,
-  ) 
-  {
+  ) {
     const url = process.env[`DRUPAL_REST_URL`];
     if (!url) {
       throw new Error(`DRUPAL_REST_URL is not configured`);
     }
     this.baseUrl = url;
     this.timeout = this.config.get<number>('HTTP_TIMEOUT_MS') ?? 10000;
-
+    const rejectUnauthorizedSetting =
+      this.config.get<string>('DRUPAL_TLS_REJECT_UNAUTHORIZED') ?? 'true';
+    this.httpsAgent = new Agent({
+      keepAlive: true,
+      rejectUnauthorized: rejectUnauthorizedSetting.toLowerCase() !== 'false',
+    });
     this.invalidateJwt();
   }
 
@@ -61,6 +65,7 @@ export class KintositeService {
     }
 
     const resolvedPath = resolveTemplate(endpoint.path, context);
+
     const url = buildUrl(
       this.baseUrl,
       typeof resolvedPath === 'string' ? resolvedPath : endpoint.path,
@@ -91,7 +96,8 @@ export class KintositeService {
       );
     };
 
-    let jwt = await this.getJwt();    
+    let jwt = await this.getJwt();
+
     let response = await sendRequest(jwt);
     if (response.status === 301 || response.status === 401) {
       this.invalidateJwt();
@@ -123,9 +129,14 @@ export class KintositeService {
       return this.jwt;
     }
 
+    const userNameSetting = process.env.DRUPAL_USERNAME;
     const privateKeySetting = process.env.DRUPAL_PRIVATEKEY;
     const keyId = process.env.DRUPAL_KEYID;
     const algorithmSetting = (process.env.DRUPAL_ALGORITHM ?? 'RSA').toUpperCase();
+
+    if (!userNameSetting) {
+      throw new Error('DRUPAL_USERNAME is not configured');
+    }
 
     if (!privateKeySetting) {
       throw new Error('DRUPAL_PRIVATEKEY is not configured');
@@ -143,13 +154,18 @@ export class KintositeService {
       ? privateKeySetting
       : await this.readPrivateKeyFromPath(privateKeySetting);
 
+    const iat = Math.floor(Date.now() / 1000);
+
     const payload: JwtPayload = {
-      iat: Math.floor(Date.now() / 1000),
+      iat: iat,
+      drupal: {
+        name: userNameSetting,
+      }
     };
 
     this.jwt = jwt.sign(payload, privateKeyPem, {
       algorithm: 'RS256' as Algorithm,
-      expiresIn: '5m',
+      expiresIn: '2h',
       keyid: keyId,
     });
 

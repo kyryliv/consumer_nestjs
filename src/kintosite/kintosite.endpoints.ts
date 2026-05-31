@@ -6,11 +6,13 @@ export const kintoEndpoints: HttpEndpointDefinition[] = [
   {
     id: 'funds_list.update',
     method: 'POST',
-    path: '/funds_list/update',
+    //    path: '/funds_list/update',
+    path: '/shoporders/update',
     params: {
       funds_list: '{{funds_list}}',
     },
   },
+
   {
     id: 'shoporders.update',
     method: 'POST',
@@ -18,5 +20,5 @@ export const kintoEndpoints: HttpEndpointDefinition[] = [
     params: {
       shoporders: '{{shoporders}}',
     },
-  },  
+  },
 ];
