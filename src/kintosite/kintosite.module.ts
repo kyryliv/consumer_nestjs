@@ -1,6 +1,6 @@
-import { HttpModule } from '@nestjs/axios';
-import { Module } from '@nestjs/common';
-import { KintositeService } from './kintosite.service';
+import { HttpModule } from "@nestjs/axios";
+import { Module } from "@nestjs/common";
+import { KintositeService } from "./kintosite.service";
 
 @Module({
   imports: [HttpModule],

@@ -1,13 +1,13 @@
-import { ConsumerService } from './consumer.service';
+import { ConsumerService } from "./consumer.service";
 
-describe('ConsumerService', () => {
+describe("ConsumerService", () => {
   const originalEnv = process.env;
   const originalFetch = global.fetch;
 
   const createContext = () => {
     const ack = jest.fn();
     const nack = jest.fn();
-    const originalMessage = { fields: { routingKey: 'shoporders_event' } };
+    const originalMessage = { fields: { routingKey: "shoporders_event" } };
 
     return {
       ack,
@@ -16,7 +16,7 @@ describe('ConsumerService', () => {
       context: {
         getChannelRef: () => ({ ack, nack }),
         getMessage: () => originalMessage,
-        getPattern: () => 'shoporders_event',
+        getPattern: () => "shoporders_event",
       },
     };
   };
@@ -24,8 +24,8 @@ describe('ConsumerService', () => {
   beforeEach(() => {
     process.env = {
       ...originalEnv,
-      DRUPAL_REST_URL: 'https://drupal.example.com/api/shoporders',
-      DRUPAL_JWT_TOKEN: 'test-token',
+      DRUPAL_REST_URL: "https://drupal.example.com/api/shoporders",
+      DRUPAL_JWT_TOKEN: "test-token",
     };
   });
 
@@ -35,11 +35,11 @@ describe('ConsumerService', () => {
     jest.restoreAllMocks();
   });
 
-  it('posts shoporders payload to Drupal and acknowledges the message', async () => {
+  it("posts shoporders payload to Drupal and acknowledges the message", async () => {
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       status: 201,
-      text: jest.fn().mockResolvedValue('created'),
+      text: jest.fn().mockResolvedValue("created"),
     });
     global.fetch = fetchMock as typeof fetch;
 
@@ -47,30 +47,30 @@ describe('ConsumerService', () => {
     const { ack, nack, originalMessage, context } = createContext();
 
     await service.handleShoporders(
-      { message: JSON.stringify({ id: 42, status: 'new' }) },
-      context as never,
+      { message: JSON.stringify({ id: 42, status: "new" }) },
+      context,
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://drupal.example.com/api/shoporders',
+      "https://drupal.example.com/api/shoporders",
       expect.objectContaining({
-        method: 'POST',
+        method: "POST",
         headers: {
-          Authorization: 'Bearer test-token',
-          'Content-Type': 'application/json',
+          Authorization: "Bearer test-token",
+          "Content-Type": "application/json",
         },
-        body: JSON.stringify({ id: 42, status: 'new' }),
+        body: JSON.stringify({ id: 42, status: "new" }),
       }),
     );
     expect(ack).toHaveBeenCalledWith(originalMessage);
     expect(nack).not.toHaveBeenCalled();
   });
 
-  it('requeues the message when the Drupal request fails', async () => {
+  it("requeues the message when the Drupal request fails", async () => {
     const fetchMock = jest.fn().mockResolvedValue({
       ok: false,
       status: 401,
-      text: jest.fn().mockResolvedValue('Unauthorized'),
+      text: jest.fn().mockResolvedValue("Unauthorized"),
     });
     global.fetch = fetchMock as typeof fetch;
 
@@ -78,8 +78,8 @@ describe('ConsumerService', () => {
     const { ack, nack, originalMessage, context } = createContext();
 
     await service.handleShoporders(
-      { message: JSON.stringify({ id: 42, status: 'new' }) },
-      context as never,
+      { message: JSON.stringify({ id: 42, status: "new" }) },
+      context,
     );
 
     expect(ack).not.toHaveBeenCalled();

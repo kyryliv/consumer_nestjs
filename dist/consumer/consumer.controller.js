@@ -33,7 +33,7 @@ let ConsumerController = class ConsumerController {
 };
 exports.ConsumerController = ConsumerController;
 __decorate([
-    (0, microservices_1.EventPattern)('shoporders_event'),
+    (0, microservices_1.EventPattern)("shoporders_event"),
     __param(0, (0, microservices_1.Payload)()),
     __param(1, (0, microservices_1.Ctx)()),
     __metadata("design:type", Function),
@@ -41,7 +41,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ConsumerController.prototype, "handleShoporders", null);
 __decorate([
-    (0, microservices_1.EventPattern)('funds_list_event'),
+    (0, microservices_1.EventPattern)("funds_list_event"),
     __param(0, (0, microservices_1.Payload)()),
     __param(1, (0, microservices_1.Ctx)()),
     __metadata("design:type", Function),
@@ -49,7 +49,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ConsumerController.prototype, "handleFundsList", null);
 __decorate([
-    (0, microservices_1.EventPattern)('*'),
+    (0, microservices_1.EventPattern)("*"),
     __param(0, (0, microservices_1.Payload)()),
     __param(1, (0, microservices_1.Ctx)()),
     __metadata("design:type", Function),
