@@ -1,8 +1,9 @@
 import { HttpService } from '@nestjs/axios';
-import { Injectable, InternalServerErrorException } from '@nestjs/common';
+import { Injectable, InternalServerErrorException, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import type { AxiosRequestConfig, Method } from 'axios';
+import { AxiosError, type AxiosRequestConfig, type Method } from 'axios';
 import { promises as fs } from 'fs';
+import { Agent as HttpAgent } from 'http';
 import { Agent } from 'https';
 import jwt, { type Algorithm, type JwtPayload } from 'jsonwebtoken';
 import path from 'path';
@@ -13,13 +14,17 @@ import { buildUrl, resolveTemplate } from './kintosite.utils';
 
 @Injectable()
 export class KintositeService {
+  private readonly logger = new Logger(KintositeService.name);
   private readonly endpointById = new Map<string, HttpEndpointDefinition>(
     kintoEndpoints.map((e) => [e.id, e]),
   );
 
   private readonly baseUrl: string;
+  private readonly baseUrlProtocol: string;
+  private readonly httpAgent: HttpAgent | undefined;
   private readonly httpsAgent: Agent | undefined;
   private readonly timeout: number;
+  private readonly allowHttp: boolean;
   private jwt: string = '';
 
   constructor(
@@ -30,10 +35,25 @@ export class KintositeService {
     if (!url) {
       throw new Error(`DRUPAL_REST_URL is not configured`);
     }
+
+    const parsedUrl = new URL(url);
+    this.baseUrlProtocol = parsedUrl.protocol;
+
+    this.allowHttp =
+      (this.config.get<string>('DRUPAL_ALLOW_HTTP') ?? 'false').toLowerCase() === 'true';
+    if (this.baseUrlProtocol === 'http:' && !this.allowHttp) {
+      throw new Error(
+        'DRUPAL_REST_URL uses HTTP. Set DRUPAL_ALLOW_HTTP=true to allow non-TLS connections.',
+      );
+    }
+
     this.baseUrl = url;
     this.timeout = this.config.get<number>('HTTP_TIMEOUT_MS') ?? 10000;
     const rejectUnauthorizedSetting =
       this.config.get<string>('DRUPAL_TLS_REJECT_UNAUTHORIZED') ?? 'true';
+    this.httpAgent = new HttpAgent({
+      keepAlive: true,
+    });
     this.httpsAgent = new Agent({
       keepAlive: true,
       rejectUnauthorized: rejectUnauthorizedSetting.toLowerCase() !== 'false',
@@ -58,6 +78,10 @@ export class KintositeService {
     context: Record<string, unknown>,
   ): Promise<unknown> {
 
+    this.logger.log(
+      `Received message with routing key: ${String(endpoint.id)}`,
+    );
+
     if (!endpoint.path) {
       throw new InternalServerErrorException(
         `Endpoint "${endpoint.id}" has no path defined.`,
@@ -70,14 +94,20 @@ export class KintositeService {
       this.baseUrl,
       typeof resolvedPath === 'string' ? resolvedPath : endpoint.path,
     );
-
-    if (!url.toLowerCase().startsWith('https://')) {
+    const isHttps = url.toLowerCase().startsWith('https://');
+    const isHttp = url.toLowerCase().startsWith('http://');
+    if (!isHttps && !isHttp) {
       throw new InternalServerErrorException(
-        `Endpoint "${endpoint.id}" resolved to a non-HTTPS URL. Only HTTPS is allowed.`,
+        `Endpoint "${endpoint.id}" resolved to an invalid URL protocol. Expected http or https.`,
+      );
+    }
+    if (isHttp && !this.allowHttp) {
+      throw new InternalServerErrorException(
+        `Endpoint "${endpoint.id}" resolved to HTTP but DRUPAL_ALLOW_HTTP is not enabled.`,
       );
     }
 
-    const resolvedData = resolveTemplate(endpoint.params, context);
+    const resolvedData = resolveTemplate('data', context);
 
     const sendRequest = async (jwt: string) => {
       const requestConfig: AxiosRequestConfig = {
@@ -86,19 +116,38 @@ export class KintositeService {
         timeout: this.timeout,
         headers: {
           'Content-Type': 'application/json',
-          ...(jwt ? { Authorization: `Bearer ${jwt}` } : {}),
+          ...(jwt ? { Authorization: `UsersJwt ${jwt}` } : {}),
         },
+        httpAgent: isHttp ? this.httpAgent : undefined,
         httpsAgent: this.httpsAgent,
         data: resolvedData,
       };
-      return firstValueFrom(
-        this.http.request({ ...requestConfig, maxRedirects: 0, validateStatus: () => true }),
-      );
+
+      let response;
+      
+      try {
+        response = await firstValueFrom(
+          this.http.request({ ...requestConfig, maxRedirects: 0, validateStatus: () => true }),
+        );
+      } catch (error) {
+        if (error instanceof AxiosError && error.code === 'EPROTO') {
+          throw new InternalServerErrorException(
+            `TLS handshake failed for URL "${url}". This usually means the protocol/port is mismatched (for example https:// against a plain HTTP port). Check DRUPAL_REST_URL and upstream TLS settings.`,
+          );
+        }
+        throw error;
+      }
+
+      return response;
     };
 
     let jwt = await this.getJwt();
 
     let response = await sendRequest(jwt);
+
+//    this.logger.error(`url: ${url}`);
+    this.logger.error(`method: ${response.status}, data: ${JSON.stringify(response.data)}`);
+
     if (response.status === 301 || response.status === 401) {
       this.invalidateJwt();
       jwt = await this.getJwt();
@@ -122,6 +171,7 @@ export class KintositeService {
       status: response.status,
       data: response.data,
     };
+
   }
 
   private async getJwt(): Promise<string> {
@@ -163,12 +213,14 @@ export class KintositeService {
       }
     };
 
+    const algorithm = 'RS256' as Algorithm;
     this.jwt = jwt.sign(payload, privateKeyPem, {
-      algorithm: 'RS256' as Algorithm,
+      algorithm: algorithm,
       expiresIn: '2h',
       keyid: keyId,
     });
 
+//    this.logger.error(`jwt: ${JSON.stringify(jwt.verify(this.jwt, privateKeyPem, { algorithms: [algorithm] }))}`);
     return this.jwt;
   }
 

@@ -15,10 +15,6 @@ export class ConsumerService {
         const channel = context.getChannelRef();
         const originalMessage = context.getMessage();
 
-        this.logger.log(
-            `Received message with routing key: ${String(context.getPattern())}`,
-        );
-
         try {
             const fundsList = JSON.parse(payload.message);
             await this.kintositeService.executeById(
