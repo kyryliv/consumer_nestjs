@@ -1,0 +1,20 @@
+services:
+  node24-consumer:
+    image: node:24-bookworm
+    user: "node"
+    working_dir: /home/node/app
+    environment:
+      - NODE_ENV=production
+    volumes:
+      - /home/koli/consumer_nestjs:/home/node/app
+    command: ["npm", "start"]
+
+  rabbitmq-broker:
+    image: rabbitmq:management-alpine
+    container_name: rabbitmq-broker
+    ports:
+      - '5672:5672'
+    environment:
+      - RABBITMQ_DEFAULT_USER=rabbitmq
+      - RABBITMQ_DEFAULT_PASS=passworD
+      

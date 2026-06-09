@@ -20,4 +20,30 @@ export const kintoEndpoints: HttpEndpointDefinition[] = [
       shoporders: "{{shoporders}}",
     },
   },
+
+  {
+    id: "asset.get",
+    method: "GET",
+    path: "/asset/{{isin}}",
+  },
+
+  {
+    id: "asset.update",
+    method: "PUT",
+    path: "/asset/{{isin}}",
+    data: {
+      asset: "{{asset}}",
+    },
+  },
+
+  {
+    id: "asset.create",
+    method: "POST",
+    path: "/asset/{{isin}}",
+    data: {
+      asset: "{{asset}}",
+    },
+  },
+
+
 ];

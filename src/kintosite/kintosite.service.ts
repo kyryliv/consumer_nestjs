@@ -17,10 +17,7 @@ import { HttpEndpointDefinition } from "./kintosite.types";
 import { buildUrl } from "./kintosite.utils";
 
 type KintositeExecutionContext = {
-  input: {
-    data?: unknown;
-    [key: string]: unknown;
-  };
+  input: Record<string, unknown>;
 };
 
 @Injectable()
@@ -92,9 +89,6 @@ export class KintositeService {
     endpoint: HttpEndpointDefinition,
     context: KintositeExecutionContext,
   ): Promise<unknown> {
-    this.logger.log(
-      `Received message with routing key: ${String(endpoint.id)}`,
-    );
 
     if (!endpoint.path) {
       throw new InternalServerErrorException(
@@ -102,7 +96,9 @@ export class KintositeService {
       );
     }
 
-    const url = buildUrl(this.baseUrl, endpoint.path);
+    const resolvedPath = this.resolvePathTemplate(endpoint.path, context.input);
+    const url = buildUrl(this.baseUrl, resolvedPath);
+    const requestData = this.resolveDataTemplate(endpoint.data, context.input);
     const isHttps = url.toLowerCase().startsWith("https://");
     const isHttp = url.toLowerCase().startsWith("http://");
 
@@ -116,7 +112,6 @@ export class KintositeService {
         `Endpoint "${endpoint.id}" resolved to HTTP but DRUPAL_ALLOW_HTTP is not enabled.`,
       );
     }
-
     const sendRequest = async (jwt: string) => {
       const requestConfig: AxiosRequestConfig = {
         method: endpoint.method,
@@ -124,11 +119,12 @@ export class KintositeService {
         timeout: this.timeout,
         headers: {
           "Content-Type": "application/json",
+          "Accept": "application/json",
           ...(jwt ? { Authorization: `UsersJwt ${jwt}` } : {}),
         },
         httpAgent: isHttp ? this.httpAgent : undefined,
         httpsAgent: this.httpsAgent,
-        data: context.input.data,
+        data: requestData,
       };
 
       let response;
@@ -170,8 +166,7 @@ export class KintositeService {
 
     if (response.status < 200 || response.status >= 300) {
       throw new InternalServerErrorException(
-        `Remote method:"${endpoint.method}" endpoint:"${endpoint.id}" returned HTTP ${response.status}`,
-      );
+        `Remote url: "${url}" method:"${endpoint.method}" endpoint:"${endpoint.id}" returned HTTP ${response.status} error: ${response.data.error}`);
     }
 
     return {
@@ -179,6 +174,75 @@ export class KintositeService {
       status: response.status,
       data: response.data,
     };
+  }
+
+  private resolvePathTemplate(
+    pathTemplate: string,
+    input: Record<string, unknown>,
+  ): string {
+    return pathTemplate.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
+      const value = this.getInputValue(input, key);
+      return encodeURIComponent(String(value));
+    });
+  }
+
+  private resolveDataTemplate(
+    template: unknown,
+    input: Record<string, unknown>,
+  ): unknown {
+    if (template === undefined || template === null) {
+      return undefined;
+    }
+
+    if (Array.isArray(template)) {
+      return template.map((item) => this.resolveDataTemplate(item, input));
+    }
+
+    if (typeof template === "object") {
+      const resolved: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(
+        template as Record<string, unknown>,
+      )) {
+        resolved[key] = this.resolveDataTemplate(value, input);
+      }
+      return resolved;
+    }
+
+    if (typeof template !== "string") {
+      return template;
+    }
+
+    const fullMatch = template.match(/^\{\{\s*([\w.]+)\s*\}\}$/);
+    if (fullMatch) {
+      return this.getInputValue(input, fullMatch[1]);
+    }
+
+    return template.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, key) => {
+      const value = this.getInputValue(input, key);
+      return String(value);
+    });
+  }
+
+  private getInputValue(input: Record<string, unknown>, keyPath: string): unknown {
+    const parts = keyPath.split(".");
+    let current: unknown = input;
+
+    for (const part of parts) {
+      if (
+        current === null ||
+        current === undefined ||
+        typeof current !== "object" ||
+        !(part in (current as Record<string, unknown>))
+      ) {
+        throw new InternalServerErrorException(
+          `Missing value for template key "${keyPath}"`,
+        );
+      }
+
+      current = (current as Record<string, unknown>)[part];
+    }
+
+    return current;
   }
 
   private async getJwt(): Promise<string> {
