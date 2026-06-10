@@ -9,12 +9,12 @@ services:
       - /home/koli/consumer_nestjs:/home/node/app
     command: ["npm", "start"]
 
-  rabbitmq-broker:
-    image: rabbitmq:management-alpine
-    container_name: rabbitmq-broker
-    ports:
-      - '5672:5672'
-    environment:
-      - RABBITMQ_DEFAULT_USER=rabbitmq
-      - RABBITMQ_DEFAULT_PASS=passworD
+  # rabbitmq-broker:
+  #   image: rabbitmq:management-alpine
+  #   container_name: rabbitmq-broker
+  #   ports:
+  #     - '5672:5672'
+  #   environment:
+  #     - RABBITMQ_DEFAULT_USER=rabbitmq
+  #     - RABBITMQ_DEFAULT_PASS=passworD
       

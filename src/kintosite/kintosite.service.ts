@@ -112,6 +112,7 @@ export class KintositeService {
         `Endpoint "${endpoint.id}" resolved to HTTP but DRUPAL_ALLOW_HTTP is not enabled.`,
       );
     }
+
     const sendRequest = async (jwt: string) => {
       const requestConfig: AxiosRequestConfig = {
         method: endpoint.method,

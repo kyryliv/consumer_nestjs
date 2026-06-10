@@ -17,7 +17,7 @@ export const kintoEndpoints: HttpEndpointDefinition[] = [
     method: "POST",
     path: "/shoporders/update",
     data: {
-      shoporders: "{{shoporders}}",
+      shoporders: "{{shoporders}}"
     },
   },
 

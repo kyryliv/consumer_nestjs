@@ -44,22 +44,24 @@ export class ConsumerService {
 
     try {
       const shoporders = JSON.parse(payload.message);
-      // const shopordersUpdateResponse = await this.kintositeService.executeById(
-      //   "shoporders.update",
-      //   { shoporders },
-      // );
 
-      // const sourceForAssetSync =
-      //   this.extractShopordersRows(shopordersUpdateResponse).length > 0
-      //     ? shopordersUpdateResponse
-      //     : shoporders;
+      if (!shoporders?.data || typeof shoporders?.data !== "object") {
+        throw new Error("Parsed shoporders payload is not an object");
+      }
 
+      await this.kintositeService.executeById(
+        "shoporders.update",
+        shoporders.data,
+      );
+
+      // this.logger.debug(`shoporders are updating, count: ${Object.keys(shoporders.data).length}`);
       await this.processAssets(shoporders);
       channel.ack(originalMessage);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Failed to forward shoporders payload: ${message}`);
-      channel.nack(originalMessage, false, true);
+//       channel.nack(originalMessage, false, true);
+      channel.ack(originalMessage);
     }
   }
 
