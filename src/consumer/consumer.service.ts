@@ -21,6 +21,7 @@ export class ConsumerService {
     const originalMessage = context.getMessage();
 
     try {
+
       const fundsList = JSON.parse(payload.message);
       await this.kintositeService.executeById(
         "funds_list.update",
@@ -54,13 +55,11 @@ export class ConsumerService {
         shoporders.data,
       );
 
-      // this.logger.debug(`shoporders are updating, count: ${Object.keys(shoporders.data).length}`);
       await this.processAssets(shoporders);
       channel.ack(originalMessage);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Failed to forward shoporders payload: ${message}`);
-//       channel.nack(originalMessage, false, true);
       channel.ack(originalMessage);
     }
   }

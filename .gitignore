@@ -4,6 +4,7 @@
 /build
 /tmp
 /certs
+/data
 
 # Logs
 logs
@@ -24,3 +25,4 @@ lerna-debug.log*
 .temp
 .tmp
 
+data/kinto_api@kinto.com__private-key__2-1783441872.key

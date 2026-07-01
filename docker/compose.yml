@@ -6,7 +6,7 @@ services:
     environment:
       - NODE_ENV=production
     volumes:
-      - /home/koli/consumer_nestjs:/home/node/app
+      - /home/koli/kinto_nestjs/consumer_nestjs:/home/node/app
     command: ["npm", "start"]
 
   # rabbitmq-broker:

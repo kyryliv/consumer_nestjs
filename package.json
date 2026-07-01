@@ -1,5 +1,5 @@
 {
-  "name": "rabbitmq_nestjs",
+  "name": "consumer_nestjs",
   "version": "0.0.1",
   "description": "",
   "author": "",
@@ -20,6 +20,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@kinto/connectivity-nestjs": "github:kyryliv/connectivity_nestjs",
     "@nestjs/axios": "^4.0.1",
     "@nestjs/common": "^11.0.1",
     "@nestjs/config": "^4.0.4",
