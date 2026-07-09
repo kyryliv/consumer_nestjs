@@ -1,7 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { RmqContext } from "@nestjs/microservices";
 import { ConfigService } from "@nestjs/config";
-import { KintositeService } from "../kintosite/kintosite.service";
+import { KintositeService } from "@kinto/connectivity-nestjs/kintosite";
 import axios from "axios";
 
 @Injectable()
@@ -56,7 +56,10 @@ export class ConsumerService {
       );
 
       await this.processAssets(shoporders);
+      this.logger.log(`Successfully processed assets from shoporders payload`);
+
       channel.ack(originalMessage);
+
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.error(`Failed to forward shoporders payload: ${message}`);
@@ -65,7 +68,9 @@ export class ConsumerService {
   }
 
   private async processAssets(source: unknown): Promise<void> {
+
     const shoporderRows = this.extractShopordersRows(source);
+
     let bonds: Record<string, unknown>[] | undefined = undefined;
 
     for (const row of shoporderRows) {
@@ -74,6 +79,7 @@ export class ConsumerService {
       const shopordertype_id: number | undefined = this.getNumberValue(row, "SHOPORDERTYPEID");
       const objectcategory_id: number | undefined = this.getNumberValue(row, "OBJECTCATEGORYID");
 
+      this.logger.log(`Processing aset with ISIN: ${isin}, QTY: ${qty}, SHOPORDERTYPEID: ${shopordertype_id}, OBJECTCATEGORYID: ${objectcategory_id}`);
       if (!isin) {
         continue;
       }
@@ -235,18 +241,23 @@ export class ConsumerService {
         : candidate;
     const rows: Array<Record<string, unknown>> = [];
 
-    for (const key of ["broker", "custody"]) {
-      const maybeArray = payloadData[key];
-      if (!Array.isArray(maybeArray)) {
+    for (const value of Object.values(payloadData)) {
+      if (!Array.isArray(value)) {
         continue;
       }
 
-      for (const item of maybeArray) {
+      for (const item of value) {
         if (item && typeof item === "object") {
-          rows.push(item as Record<string, unknown>);
+          const row = item as Record<string, unknown>;
+          if (!this.getStringValue(row, "ISIN")) {
+            continue;
+          }
+
+          rows.push(row);
         }
       }
     }
+
     return rows;
   }
 

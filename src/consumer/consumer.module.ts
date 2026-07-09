@@ -1,5 +1,5 @@
 import { Module } from "@nestjs/common";
-import { KintositeModule } from "../kintosite/kintosite.module";
+import { KintositeModule } from "@kinto/connectivity-nestjs/kintosite";
 import { ConsumerController } from "./consumer.controller";
 import { ConsumerService } from "./consumer.service";
 

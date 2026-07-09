@@ -8,7 +8,7 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ConsumerModule = void 0;
 const common_1 = require("@nestjs/common");
-const kintosite_module_1 = require("../kintosite/kintosite.module");
+const kintosite_1 = require("@kinto/connectivity-nestjs/kintosite");
 const consumer_controller_1 = require("./consumer.controller");
 const consumer_service_1 = require("./consumer.service");
 let ConsumerModule = class ConsumerModule {
@@ -16,7 +16,7 @@ let ConsumerModule = class ConsumerModule {
 exports.ConsumerModule = ConsumerModule;
 exports.ConsumerModule = ConsumerModule = __decorate([
     (0, common_1.Module)({
-        imports: [kintosite_module_1.KintositeModule],
+        imports: [kintosite_1.KintositeModule],
         controllers: [consumer_controller_1.ConsumerController],
         providers: [consumer_service_1.ConsumerService],
     })
