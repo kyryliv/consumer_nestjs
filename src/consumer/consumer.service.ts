@@ -13,7 +13,7 @@ export class ConsumerService {
     private readonly config: ConfigService,
   ) { }
 
-  async handleFundsListUpdate(
+  async handleFundUpdate(
     payload: { message: string },
     context: RmqContext,
   ): Promise<void> {
@@ -22,17 +22,34 @@ export class ConsumerService {
 
     try {
 
-      const fundsList = JSON.parse(payload.message);
-      await this.kintositeService.executeById(
-        "funds_list.update",
-        { funds_list: fundsList },
-      );
+      const data = JSON.parse(payload.message);
+
+      if (!data || typeof data !== "object") {
+        console.log(data);
+        throw new Error("Parsed fund payload is not an object");
+      }
+
+      if (!data?.isin || typeof data?.isin !== "string") {
+        throw new Error("Parsed fund payload has an invalid isin");
+      }
+
+      if (!data?.asset || typeof data?.asset !== "object") {
+        throw new Error("Parsed fund payload is missing a valid asset object");
+      }
+      // this.logger.debug(`Received fund data:${JSON.stringify(data) ?? "unknown"}`);
+
+      await this.kintositeService.executeById("fund.update", {
+        isin: data?.isin,
+        fund: data,
+      });
+
       channel.ack(originalMessage);
 
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Failed to forward funds list payload: ${message}`);
-      channel.nack(originalMessage, false, true);
+      this.logger.error(`Failed to forward fund payload: ${message}`);
+      // channel.nack(originalMessage, false, true);
+      channel.ack(originalMessage);
     }
   }
 
@@ -50,10 +67,7 @@ export class ConsumerService {
         throw new Error("Parsed shoporders payload is not an object");
       }
 
-      await this.kintositeService.executeById(
-        "shoporders.update",
-        shoporders.data,
-      );
+      await this.kintositeService.executeById("shoporders.update", shoporders.data);
 
       await this.processAssets(shoporders);
       this.logger.log(`Successfully processed assets from shoporders payload`);
@@ -70,31 +84,51 @@ export class ConsumerService {
   private async processAssets(source: unknown): Promise<void> {
 
     const shoporderRows = this.extractShopordersRows(source);
+    const bonds = await this.fetchBonds();
 
-    let bonds: Record<string, unknown>[] | undefined = undefined;
+    if (!bonds) {
+      this.logger.warn("No bonds data available, skipping bond processing");
+    }
 
     for (const row of shoporderRows) {
       const isin: string | undefined = this.getStringValue(row, "ISIN");
-      const qty: number | undefined = this.getNumberValue(row, "QTY");
-      const shopordertype_id: number | undefined = this.getNumberValue(row, "SHOPORDERTYPEID");
-      const objectcategory_id: number | undefined = this.getNumberValue(row, "OBJECTCATEGORYID");
 
-      this.logger.log(`Processing aset with ISIN: ${isin}, QTY: ${qty}, SHOPORDERTYPEID: ${shopordertype_id}, OBJECTCATEGORYID: ${objectcategory_id}`);
       if (!isin) {
+        continue;
+      }
+
+      const category_id: number | undefined = this.getNumberValue(row, "OBJECTCATEGORYID");
+      const category_name: string | undefined = this.getStringValue(row, "OBJECTCATEGORYNAME");
+      const object_id: number | undefined = this.getNumberValue(row, "OBJECTID");
+      const title: string | undefined = this.getStringValue(row, "OBJECTNAME");
+      const emitentedrpou: string | undefined = this.getStringValue(row, "EMITENTEDRPOU");
+
+      if (
+        !category_id
+        || !category_name
+        || !object_id
+        || !title
+        || !emitentedrpou
+      ) {
+        this.logger.warn(`Skipping asset with ISIN ${isin} due to missing information`);
         continue;
       }
 
       let data: Record<string, unknown> =
       {
-        shop: (shopordertype_id === 1 || shopordertype_id === 3) ? { sell_qty: qty } : { buy_qty: qty }
+        isin: isin,
+        category_id: category_id,
+        category_name: category_name,
+        object_id: object_id,
+        title: title,
+        edrpou: emitentedrpou,
       };
 
       try {
 
-        await this.kintositeService.executeById("asset.get", { isin });
         await this.kintositeService.executeById("asset.update", {
           isin: isin,
-          asset: { data: data },
+          asset: data,
         });
 
       } catch (error) {
@@ -105,63 +139,26 @@ export class ConsumerService {
 
           try {
 
-            let title: string | undefined = this.getStringValue(row, "OBJECTNAME");
-            if (!title) {
-              title = `Asset ${isin}`;
-            }
+            if (bonds && category_id == 4) {
 
-            if (objectcategory_id === 4) {
-
-              if (!bonds) {
-                bonds = await this.fetchBonds();
-              }
-
-              if (!bonds) {
-                this.logger.error(`Failed to fetch bonds from NBU, cannot create asset with ISIN ${isin}`);
-                continue;
-              }
-
-              const bondRecord = bonds.find((item) => {
-                const cpcode = item["cpcode"] as string;
-                return typeof cpcode === "string"
-                  ? cpcode.trim().toUpperCase() === isin
-                  : String(cpcode).trim().toUpperCase() === isin;
+              const bondResult = await this.processBond({
+                bonds: bonds,
+                category_id: category_id,
+                isin: isin,
               });
 
-              if (!bondRecord) {
-                this.logger.error(
-                  `Asset with ISIN ${isin} not found in bonds, skipping...`,
-                );
+              if (bondResult.skip) {
                 continue;
               }
 
-              if (bondRecord.pgs_date) {
-                const formattedPgsDate = this.formatYmdToDmy(bondRecord.pgs_date);
-                title = `ОВДП (погашення ${formattedPgsDate ?? bondRecord.pgs_date})`;
-              }
+              data.title = bondResult.title;
+              data.bond = bondResult.bond;
 
-              data.nominal = bondRecord.nominal;
-              data.bond = {
-                finish_date: bondRecord.pgs_date,
-                start_date: bondRecord.razm_date,
-                pay_period: bondRecord.pay_period,
-                payments: (bondRecord.payments as Array<Record<string, unknown>>).map(
-                  ({ array: _, ...rest }) => rest,
-                ),
-              }
             }
-
-            let asset = {
-              title: title,
-              object_id: row.OBJECTID,
-              category_id: row.OBJECTCATEGORYID,
-              category_name: row.OBJECTCATEGORYNAME,
-              data: data,
-            };
 
             await this.kintositeService.executeById("asset.create", {
               isin: isin,
-              asset: asset,
+              ...data,
             });
 
           } catch (error) {
@@ -177,6 +174,52 @@ export class ConsumerService {
         }
       }
     }
+  }
+
+  private async processBond(params: {
+    bonds: Record<string, unknown>[] | undefined;
+    category_id: number | undefined;
+    isin: string;
+  }): Promise<{
+    skip: boolean;
+    title: string | undefined;
+    bond: Record<string, unknown> | undefined;
+  }> {
+    const { bonds, category_id, isin } = params;
+
+    if (!bonds || category_id !== 4) {
+      return { skip: true, title: undefined, bond: undefined };
+    }
+
+    const bondRecord = bonds.find((item) => {
+      const cpcode = item["cpcode"] as string;
+      return typeof cpcode === "string"
+        ? cpcode.trim().toUpperCase() === isin
+        : String(cpcode).trim().toUpperCase() === isin;
+    });
+
+    if (!bondRecord) {
+      this.logger.error(`Asset with ISIN ${isin} not found in bonds, skipping...`);
+      return { skip: true, title: undefined, bond: undefined };
+    }
+
+    let title: string | undefined = isin;
+    if (bondRecord.pgs_date) {
+      const formattedPgsDate = this.formatYmdToDmy(bondRecord.pgs_date);
+      title = `ОВДП (погашення ${formattedPgsDate ?? bondRecord.pgs_date})`;
+    }
+
+    const bond = {
+      nominal: bondRecord.nominal,
+      finish_date: bondRecord.pgs_date,
+      start_date: bondRecord.razm_date,
+      pay_period: bondRecord.pay_period,
+      payments: (bondRecord.payments as Array<Record<string, unknown>>).map(
+        ({ array: _, ...rest }) => rest,
+      ),
+    };
+
+    return { skip: false, title: title, bond: bond };
   }
 
   private async fetchBonds(): Promise<Record<string, unknown>[] | undefined> {
@@ -203,31 +246,6 @@ export class ConsumerService {
     }
   }
 
-  private async fetchBondRecord(isin: string): Promise<Record<string, unknown> | undefined> {
-    const url = this.config.get<string>("BANK_GOV_UA_URL");
-    if (!url) {
-      this.logger.warn("BANK_GOV_UA_URL is not configured");
-      return undefined;
-    }
-
-    try {
-      const response = await axios.get<Array<Record<string, unknown>>>(url);
-      const normalizedIsin = isin.trim().toUpperCase();
-
-      return response.data.find((item) => {
-        const cpcode = item["cpcode"] as string;
-        return typeof cpcode === "string"
-          ? cpcode.trim().toUpperCase() === normalizedIsin
-          : String(cpcode).trim().toUpperCase() === normalizedIsin;
-      });
-
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      this.logger.error(`Failed to fetch depo security for ISIN ${isin}: ${message}`);
-      return undefined;
-    }
-  }
-
   private extractShopordersRows(source: unknown): Array<Record<string, unknown>> {
 
     if (!source || typeof source !== "object") {
@@ -240,6 +258,7 @@ export class ConsumerService {
         ? (candidate.data as Record<string, unknown>)
         : candidate;
     const rows: Array<Record<string, unknown>> = [];
+    const seenIsins = new Set<string>();
 
     for (const value of Object.values(payloadData)) {
       if (!Array.isArray(value)) {
@@ -249,10 +268,17 @@ export class ConsumerService {
       for (const item of value) {
         if (item && typeof item === "object") {
           const row = item as Record<string, unknown>;
-          if (!this.getStringValue(row, "ISIN")) {
+          const isin = this.getStringValue(row, "ISIN");
+          if (!isin) {
             continue;
           }
 
+          const normalizedIsin = isin.trim().toUpperCase();
+          if (seenIsins.has(normalizedIsin)) {
+            continue;
+          }
+
+          seenIsins.add(normalizedIsin);
           rows.push(row);
         }
       }

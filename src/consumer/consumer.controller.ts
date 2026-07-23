@@ -14,12 +14,12 @@ export class ConsumerController {
     await this.consumerService.handleShopordersUpdate(payload, context);
   }
 
-  @EventPattern("funds_list_event")
+  @EventPattern("fundslist_event")
   async handleFundsList(
     @Payload() payload: { message: string; createdAt?: string },
     @Ctx() context: RmqContext,
   ): Promise<void> {
-    await this.consumerService.handleFundsListUpdate(payload, context);
+     await this.consumerService.handleFundUpdate(payload, context);
   }
 
   @EventPattern("*")

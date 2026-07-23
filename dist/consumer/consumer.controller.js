@@ -25,7 +25,7 @@ let ConsumerController = class ConsumerController {
         await this.consumerService.handleShopordersUpdate(payload, context);
     }
     async handleFundsList(payload, context) {
-        await this.consumerService.handleFundsListUpdate(payload, context);
+        await this.consumerService.handleFundUpdate(payload, context);
     }
     handleEtc(payload, context) {
         this.consumerService.handleEtc(payload, context);
@@ -41,7 +41,7 @@ __decorate([
     __metadata("design:returntype", Promise)
 ], ConsumerController.prototype, "handleShoporders", null);
 __decorate([
-    (0, microservices_1.EventPattern)("funds_list_event"),
+    (0, microservices_1.EventPattern)("fundslist_event"),
     __param(0, (0, microservices_1.Payload)()),
     __param(1, (0, microservices_1.Ctx)()),
     __metadata("design:type", Function),

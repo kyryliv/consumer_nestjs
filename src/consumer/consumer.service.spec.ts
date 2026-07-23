@@ -35,54 +35,67 @@ describe("ConsumerService", () => {
     jest.restoreAllMocks();
   });
 
-  it("posts shoporders payload to Drupal and acknowledges the message", async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      status: 201,
-      text: jest.fn().mockResolvedValue("created"),
-    });
-    global.fetch = fetchMock as typeof fetch;
+  it("forwards shoporders payload and acknowledges the message", async () => {
+    const executeById = jest.fn().mockResolvedValue({});
+    const service = new ConsumerService(
+      { executeById } as never,
+      { get: jest.fn() } as never,
+    );
+    const { ack, originalMessage, context } = createContext();
 
-    const service = new ConsumerService();
-    const { ack, nack, originalMessage, context } = createContext();
-
-    await service.handleShoporders(
-      { message: JSON.stringify({ id: 42, status: "new" }) },
+    await service.handleShopordersUpdate(
+      {
+        message: JSON.stringify({
+          data: {
+            orders: [{ ISIN: "US123", QTY: 1 }],
+          },
+        }),
+      },
       context,
     );
 
-    expect(fetchMock).toHaveBeenCalledWith(
-      "https://drupal.example.com/api/shoporders",
-      expect.objectContaining({
-        method: "POST",
-        headers: {
-          Authorization: "Bearer test-token",
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ id: 42, status: "new" }),
-      }),
-    );
+    expect(executeById).toHaveBeenCalledWith("shoporders.update", {
+      orders: [{ ISIN: "US123", QTY: 1 }],
+    });
     expect(ack).toHaveBeenCalledWith(originalMessage);
-    expect(nack).not.toHaveBeenCalled();
   });
 
-  it("requeues the message when the Drupal request fails", async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: false,
-      status: 401,
-      text: jest.fn().mockResolvedValue("Unauthorized"),
-    });
-    global.fetch = fetchMock as typeof fetch;
+  it("acknowledges the message when shoporders forwarding fails", async () => {
+    const executeById = jest.fn().mockRejectedValue(new Error("boom"));
+    const service = new ConsumerService(
+      { executeById } as never,
+      { get: jest.fn() } as never,
+    );
+    const { ack, originalMessage, context } = createContext();
 
-    const service = new ConsumerService();
-    const { ack, nack, originalMessage, context } = createContext();
-
-    await service.handleShoporders(
-      { message: JSON.stringify({ id: 42, status: "new" }) },
+    await service.handleShopordersUpdate(
+      {
+        message: JSON.stringify({
+          data: {
+            orders: [{ ISIN: "US123", QTY: 1 }],
+          },
+        }),
+      },
       context,
     );
 
-    expect(ack).not.toHaveBeenCalled();
-    expect(nack).toHaveBeenCalledWith(originalMessage, false, true);
+    expect(ack).toHaveBeenCalledWith(originalMessage);
+  });
+
+  it("extracts only the first row for each unique ISIN", () => {
+    const service = new ConsumerService({} as never, { get: jest.fn() } as never);
+
+    const rows = (service as any).extractShopordersRows({
+      data: {
+        orders: [
+          { ISIN: "US123", QTY: 1 },
+          { ISIN: "us123", QTY: 2 },
+          { ISIN: "DE456", QTY: 3 },
+        ],
+      },
+    });
+
+    expect(rows).toHaveLength(2);
+    expect(rows.map((row: { ISIN: string }) => row.ISIN)).toEqual(["US123", "DE456"]);
   });
 });
